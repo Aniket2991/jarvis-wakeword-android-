@@ -23,7 +23,7 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Check whether release-signing secrets are configured
+      - name: Check whether owner release-signing secrets are configured
         id: release_signing
         env:
           KEYSTORE_BASE64: ${{ secrets.JARVIS_KEYSTORE_BASE64 }}
@@ -35,7 +35,7 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "No owner-controlled signing key is configured. Release variant will be build-checked but not distributed as an installable release."
+            echo "Using temporary debug-certificate signature for release preview only. Do not distribute it or expect future builds to update over it."
           fi
 
       - name: Lint and build debug plus release variants
@@ -45,15 +45,16 @@ jobs:
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Verify release is not debuggable
+      - name: Verify release APK signature and non-debuggable configuration
         run: |
-          RELEASE_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
+          RELEASE_APK="app/build/outputs/apk/release/app-release.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$RELEASE_APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$RELEASE_APK" > "$RUNNER_TEMP/release-badging.txt"
           if grep -q "application-debuggable" "$RUNNER_TEMP/release-badging.txt"; then
             echo "ERROR: release variant is debuggable."
             exit 1
           fi
-          echo "Release manifest does not advertise application-debuggable."
+          echo "Release APK is signed and does not advertise application-debuggable."
 
       - name: Upload debug APK for development tests
         uses: actions/upload-artifact@v4
@@ -62,8 +63,16 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
-      # Keep the private signing key in repository Actions Secrets. Never commit a keystore or password.
-      - name: Prepare release signing key
+      - name: Upload temporary release preview
+        if: steps.release_signing.outputs.available != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-wakeword-release-preview-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+
+      # Owner-controlled release signing: never commit a keystore or password.
+      - name: Prepare owner release signing key
         if: steps.release_signing.outputs.available == 'true'
         env:
           JARVIS_KEYSTORE_BASE64: ${{ secrets.JARVIS_KEYSTORE_BASE64 }}
@@ -71,7 +80,7 @@ jobs:
           printf '%s' "$JARVIS_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/jarvis-release.jks"
           echo "JARVIS_KEYSTORE_PATH=$RUNNER_TEMP/jarvis-release.jks" >> "$GITHUB_ENV"
 
-      - name: Build signed release APK
+      - name: Build owner-signed release APK
         if: steps.release_signing.outputs.available == 'true'
         env:
           JARVIS_KEYSTORE_PASSWORD: ${{ secrets.JARVIS_KEYSTORE_PASSWORD }}
@@ -81,7 +90,7 @@ jobs:
           gradle assembleRelease
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
 
-      - name: Upload signed release APK
+      - name: Upload owner-signed release APK
         if: steps.release_signing.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
