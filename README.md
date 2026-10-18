@@ -1,38 +1,41 @@
-# JARVIS Wake Word Android — prototype
+# JARVIS Wake Word Android — experimental prototype (0.3.0)
 
-This is an experimental Android microphone-listening prototype, not a finished hands-free assistant.
+This app listens for the word **“Jarvis”** after the user starts it and grants microphone permission. It is an experimental voice trigger, not a finished always-on assistant.
 
-## Microphone and privacy
-- Listening starts only after the user opens the app, checks the microphone disclosure, and grants the Android microphone permission.
-- A persistent notification is displayed while the service runs. Use its **Stop listening** action or the app's Stop button to stop it.
-- The app uses Android SpeechRecognizer. It is not a dedicated offline wake-word detector; depending on the speech provider and phone settings, audio may be processed by that provider.
-- The app does not currently send recognised commands to the JARVIS website, automatically launch the assistant, or perform commands.
-- Android and phone-vendor battery/background limits may interrupt listening. Force-stop, reboot, or a restricted speech provider can also stop it.
+## How to use it
+1. Install a tested build only if Play Protect allows it.
+2. Open **JARVIS Wake Word**, read the microphone/privacy disclosure, and tick the acknowledgement box.
+3. Grant microphone and notification permissions, then tap **Start wake listening**.
+4. Leave the ongoing notification visible. If the provider recognises “Jarvis”, the notification text changes; tap **Open JARVIS** to launch the existing assistant website in your browser.
+5. To stop microphone listening, tap **Stop listening** in the notification or the app.
 
-## Build debug APK
-1. Open the repository's Actions tab.
-2. Open the completed **Build JARVIS Wake Word APK** run.
-3. Download the `jarvis-wakeword-debug-apk` artifact and extract `app-debug.apk`.
+## Important limitations
+- This uses Android's SpeechRecognizer API, not a dedicated low-power wake-word model. It may miss or misrecognise the trigger.
+- It prefers Android on-device speech recognition when the device reports it is available. Otherwise, the selected speech provider may process audio online.
+- Saying “Jarvis” does not automatically open another app from the background; tap **Open JARVIS** in the notification.
+- Android background execution and battery policies can interrupt listening, especially with the screen off. This build is not guaranteed to listen continuously or survive a force-stop/reboot.
+- Repeated recognition errors pause listening instead of retrying indefinitely.
+- The app does not forward spoken commands into the website or execute them.
 
-## Signed release build
-The workflow builds a signed release APK only when these four GitHub repository Actions secrets are configured:
-- `JARVIS_KEYSTORE_BASE64`: base64-encoded Android keystore file
-- `JARVIS_KEYSTORE_PASSWORD`
-- `JARVIS_KEY_ALIAS`
-- `JARVIS_KEY_PASSWORD`
+## Privacy and security changes in 0.3.0
+- Explicit microphone disclosure and user acknowledgement before starting.
+- Persistent notification with **Open JARVIS** and **Stop listening** actions.
+- On-device recognition preferred when Android reports support.
+- Cleartext network traffic disabled; system-trusted certificates only.
+- Release variant uses R8 code shrinking and explicitly disables debugging.
+- Speech-recognition provider visibility is declared for Android 11+.
 
-Create and retain your own keystore privately. Never commit or publish the keystore or its passwords. If these secrets are not configured, the workflow builds only the debug APK.
+## Build and verification
+The GitHub Actions workflow runs Android lint and builds both debug and release variants. It verifies the debug APK signature and checks that the release variant is not debuggable.
 
-## Test plan
-1. Install the APK and open the app.
-2. Read and accept the microphone notice; grant the requested permissions.
-3. Start listening and verify the ongoing notification appears.
-4. Switch to another app and say “Jarvis”; check whether the notification updates.
-5. Press **Stop listening** in the notification and verify the notification disappears.
-6. Repeat with battery saver and screen locked, noting that reliability is not guaranteed.
+- `jarvis-wakeword-debug-apk` is a development/testing build, not the recommended distribution build.
+- The signed `jarvis-wakeword-release-apk` artifact is produced only when owner-controlled release-signing secrets are configured.
+- Without those secrets, CI build-checks an unsigned release variant but does not present it as an installable release.
+
+To configure release signing, create and retain your own keystore privately, then add these repository Actions secrets: `JARVIS_KEYSTORE_BASE64`, `JARVIS_KEYSTORE_PASSWORD`, `JARVIS_KEY_ALIAS`, and `JARVIS_KEY_PASSWORD`. Never commit or publish the keystore or passwords.
 
 ## Play Protect
-A successful build or a release signature does not guarantee that Google Play Protect will stop showing a warning. Do not disable Play Protect globally. If it continues to flag the app, stop installing it and review the warning/report it for review.
+A successful build, a clean general scan, or a release signature does not guarantee that Google Play Protect will stop warning about this package. If it says **“Harmful app blocked”**, do not bypass the warning or turn Play Protect off. Review the exact APK and use Google's official developer-warning review process if the app is believed to be incorrectly classified.
 
-## Next engineering step
-For reliable, low-power wake-word detection, replace SpeechRecognizer with a dedicated compatible on-device keyword-spotting engine and then implement an explicit wake-to-command flow. Review third-party model and SDK licenses before bundling.
+## Next step for a genuinely reliable wake word
+Replace SpeechRecognizer cycling with a dedicated on-device keyword-spotting engine and then implement an explicit wake-to-command flow. Review model/SDK licences and validate behaviour on the target phone before distribution.
