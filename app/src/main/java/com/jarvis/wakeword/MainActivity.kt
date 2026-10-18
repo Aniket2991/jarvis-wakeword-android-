@@ -2,8 +2,10 @@ package com.jarvis.wakeword
 
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
@@ -30,7 +32,7 @@ class MainActivity : Activity() {
         })
 
         layout.addView(TextView(this).apply {
-            text = "Prototype • Microphone use is visible and can be stopped at any time."
+            text = "Experimental voice trigger • Keep the persistent notification visible while listening."
             textSize = 15f
             setPadding(0, 16, 0, 24)
         })
@@ -41,7 +43,7 @@ class MainActivity : Activity() {
         })
 
         layout.addView(TextView(this).apply {
-            text = "When you start listening, this app uses Android SpeechRecognizer to listen for the word “Jarvis”. This is not an offline keyword detector. Depending on your phone and speech-provider settings, audio may be sent to that provider for recognition. The app does not currently send commands to your JARVIS website or automatically execute them. A permanent notification stays visible while listening."
+            text = "When you start listening, Android SpeechRecognizer checks recognized speech for “Jarvis”. If your phone supports Android on-device recognition, the app prefers it; otherwise, your speech provider may process audio online. This is not a dedicated always-on keyword detector, so detection can be delayed or missed and listening may stop under Android battery or background limits. Saying “Jarvis” does not automatically launch the assistant; use the Open JARVIS action in the notification or the button below. You can stop the microphone listener at any time."
             textSize = 15f
             setPadding(0, 12, 0, 12)
         })
@@ -64,6 +66,11 @@ class MainActivity : Activity() {
         })
 
         layout.addView(Button(this).apply {
+            text = "Open JARVIS assistant"
+            setOnClickListener { openAssistant() }
+        })
+
+        layout.addView(Button(this).apply {
             text = "Stop listening"
             setOnClickListener {
                 stopService(Intent(this@MainActivity, WakeWordService::class.java))
@@ -72,6 +79,19 @@ class MainActivity : Activity() {
         })
 
         setContentView(layout)
+    }
+
+    private fun openAssistant() {
+        try {
+            startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://jarvis-web-assistant-five.vercel.app")
+                )
+            )
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, "No browser is available to open JARVIS.", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun requestPermissionsThenStart() {
