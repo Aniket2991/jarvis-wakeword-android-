@@ -1,4 +1,4 @@
-# JARVIS Wake Word Android — experimental prototype (0.3.0)
+# JARVIS Wake Word Android — experimental prototype (0.4.0)
 
 This app listens for the word **“Jarvis”** after the user starts it and grants microphone permission. It is an experimental voice trigger, not a finished always-on assistant.
 
@@ -6,18 +6,18 @@ This app listens for the word **“Jarvis”** after the user starts it and gran
 1. Install a tested build only if Play Protect allows it.
 2. Open **JARVIS Wake Word**, read the microphone/privacy disclosure, and tick the acknowledgement box.
 3. Grant microphone and notification permissions, then tap **Start wake listening**.
-4. Leave the ongoing notification visible. If the provider recognises “Jarvis”, the notification text changes; tap **Open JARVIS** to launch the existing assistant website in your browser.
+4. Leave the ongoing notification visible. When recognition detects “Jarvis”, the app now attempts to open the existing assistant website automatically. If Android blocks a background launch, tap **Open JARVIS** in the notification.
 5. To stop microphone listening, tap **Stop listening** in the notification or the app.
 
 ## Important limitations
 - This uses Android's SpeechRecognizer API, not a dedicated low-power wake-word model. It may miss or misrecognise the trigger.
 - It prefers Android on-device speech recognition when the device reports it is available. Otherwise, the selected speech provider may process audio online.
-- Saying “Jarvis” does not automatically open another app from the background; tap **Open JARVIS** in the notification.
+- Automatic opening is best-effort. Android restricts launching activities from a background service; the notification action remains the reliable fallback.
 - Android background execution and battery policies can interrupt listening, especially with the screen off. This build is not guaranteed to listen continuously or survive a force-stop/reboot.
 - Repeated recognition errors pause listening instead of retrying indefinitely.
 - The app does not forward spoken commands into the website or execute them.
 
-## Privacy and security changes in 0.3.0
+## Privacy and security changes
 - Explicit microphone disclosure and user acknowledgement before starting.
 - Persistent notification with **Open JARVIS** and **Stop listening** actions.
 - On-device recognition preferred when Android reports support.
