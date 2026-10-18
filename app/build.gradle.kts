@@ -24,8 +24,8 @@ android {
         jvmTarget = "17"
     }
 
-    // Release signing is supplied only through GitHub Actions secrets.
-    // Never commit keystores or signing passwords to source control.
+    // Owner-controlled signing is preferred. If no key is supplied, CI produces a
+    // temporary debug-signed release preview for first-install testing only.
     signingConfigs {
         create("release") {
             val keyStorePath = System.getenv("JARVIS_KEYSTORE_PATH")
@@ -51,8 +51,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt")
             )
             val keyStorePath = System.getenv("JARVIS_KEYSTORE_PATH")
-            if (!keyStorePath.isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (!keyStorePath.isNullOrBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                // Temporary CI preview only; do not use this certificate for distribution.
+                signingConfigs.getByName("debug")
             }
         }
     }
