@@ -17,7 +17,6 @@ jobs:
           java-version: '17'
       - name: Install Android SDK packages
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
@@ -25,9 +24,36 @@ jobs:
           gradle-version: '8.9'
       - name: Build debug APK
         run: gradle assembleDebug
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: jarvis-wakeword-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      # For a real release, keep the private signing key in GitHub Actions Secrets.
+      # Required secrets: JARVIS_KEYSTORE_BASE64, JARVIS_KEYSTORE_PASSWORD,
+      # JARVIS_KEY_ALIAS, JARVIS_KEY_PASSWORD. Never store these in source files.
+      - name: Prepare release signing key
+        if: ${{ secrets.JARVIS_KEYSTORE_BASE64 != '' && secrets.JARVIS_KEYSTORE_PASSWORD != '' && secrets.JARVIS_KEY_ALIAS != '' && secrets.JARVIS_KEY_PASSWORD != '' }}
+        env:
+          JARVIS_KEYSTORE_BASE64: ${{ secrets.JARVIS_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$JARVIS_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/jarvis-release.jks"
+          echo "JARVIS_KEYSTORE_PATH=$RUNNER_TEMP/jarvis-release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        if: ${{ secrets.JARVIS_KEYSTORE_BASE64 != '' && secrets.JARVIS_KEYSTORE_PASSWORD != '' && secrets.JARVIS_KEY_ALIAS != '' && secrets.JARVIS_KEY_PASSWORD != '' }}
+        env:
+          JARVIS_KEYSTORE_PASSWORD: ${{ secrets.JARVIS_KEYSTORE_PASSWORD }}
+          JARVIS_KEY_ALIAS: ${{ secrets.JARVIS_KEY_ALIAS }}
+          JARVIS_KEY_PASSWORD: ${{ secrets.JARVIS_KEY_PASSWORD }}
+        run: gradle assembleRelease
+
+      - name: Upload signed release APK
+        if: ${{ secrets.JARVIS_KEYSTORE_BASE64 != '' && secrets.JARVIS_KEYSTORE_PASSWORD != '' && secrets.JARVIS_KEY_ALIAS != '' && secrets.JARVIS_KEY_PASSWORD != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-wakeword-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
           retention-days: 14
