@@ -35,21 +35,34 @@ jobs:
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "Release APK skipped: configure all four JARVIS signing secrets to build a signed release."
+            echo "No owner-controlled signing key is configured. Release variant will be build-checked but not distributed as an installable release."
           fi
 
-      - name: Build debug APK
-        run: gradle assembleDebug
+      - name: Lint and build debug plus release variants
+        run: gradle lintDebug assembleDebug assembleRelease
 
-      - name: Upload debug APK
+      - name: Verify debug APK signature
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Verify release is not debuggable
+        run: |
+          RELEASE_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$RELEASE_APK" > "$RUNNER_TEMP/release-badging.txt"
+          if grep -q "application-debuggable" "$RUNNER_TEMP/release-badging.txt"; then
+            echo "ERROR: release variant is debuggable."
+            exit 1
+          fi
+          echo "Release manifest does not advertise application-debuggable."
+
+      - name: Upload debug APK for development tests
         uses: actions/upload-artifact@v4
         with:
           name: jarvis-wakeword-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
-      # For a release, keep the private signing key in GitHub Actions Secrets.
-      # Never commit a keystore or password to the repository.
+      # Keep the private signing key in repository Actions Secrets. Never commit a keystore or password.
       - name: Prepare release signing key
         if: steps.release_signing.outputs.available == 'true'
         env:
@@ -64,7 +77,9 @@ jobs:
           JARVIS_KEYSTORE_PASSWORD: ${{ secrets.JARVIS_KEYSTORE_PASSWORD }}
           JARVIS_KEY_ALIAS: ${{ secrets.JARVIS_KEY_ALIAS }}
           JARVIS_KEY_PASSWORD: ${{ secrets.JARVIS_KEY_PASSWORD }}
-        run: gradle assembleRelease
+        run: |
+          gradle assembleRelease
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
 
       - name: Upload signed release APK
         if: steps.release_signing.outputs.available == 'true'
