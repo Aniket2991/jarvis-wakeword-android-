@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -23,13 +24,15 @@ import kotlin.math.min
  * Experimental voice trigger, not a dedicated wake-word engine.
  *
  * SpeechRecognizer may use a remote provider unless on-device recognition is available.
- * A persistent notification exposes both an Open JARVIS action and a Stop action.
+ * A persistent notification provides an Open JARVIS fallback and a Stop action.
+ * Android may block automatic activity launches while this service is in the background.
  */
 class WakeWordService : Service() {
     private var recognizer: SpeechRecognizer? = null
     private val handler = Handler(Looper.getMainLooper())
     private var restarting = false
     private var consecutiveErrors = 0
+    private var lastAssistantLaunchAttempt = 0L
     private val channelId = "jarvis_wake_listener"
     private val notificationId = 71
 
@@ -37,6 +40,7 @@ class WakeWordService : Service() {
         const val ACTION_STOP = "com.jarvis.wakeword.ACTION_STOP_LISTENING"
         private const val ASSISTANT_URL = "https://jarvis-web-assistant-five.vercel.app"
         private const val MAX_CONSECUTIVE_ERRORS = 8
+        private const val LAUNCH_DEBOUNCE_MS = 10_000L
     }
 
     override fun onCreate() {
@@ -81,8 +85,6 @@ class WakeWordService : Service() {
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
 
-                // Results or an error callback will schedule the next recognition session.
-                // Restarting here can race with onResults and discard the recognised phrase.
                 override fun onEndOfSpeech() {}
 
                 override fun onError(error: Int) {
@@ -107,15 +109,8 @@ class WakeWordService : Service() {
                     val phrases = results
                         ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         .orEmpty()
-                    if (phrases.any { it.lowercase(Locale.ROOT).contains("jarvis") }) {
-                        updateNotification("“Jarvis” detected • Tap Open JARVIS to launch the assistant")
-                        handler.post {
-                            Toast.makeText(
-                                this@WakeWordService,
-                                "Jarvis detected. Tap Open JARVIS in the notification to continue.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
+                    if (phrases.any { it.containsWakeWord() }) {
+                        onWakeWordDetected()
                     } else {
                         updateNotification("Microphone active • Listening for “Jarvis”")
                     }
@@ -126,8 +121,8 @@ class WakeWordService : Service() {
                     val phrases = partialResults
                         ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         .orEmpty()
-                    if (phrases.any { it.lowercase(Locale.ROOT).contains("jarvis") }) {
-                        updateNotification("“Jarvis” detected • Tap Open JARVIS to launch the assistant")
+                    if (phrases.any { it.containsWakeWord() }) {
+                        onWakeWordDetected()
                     }
                 }
 
@@ -151,6 +146,35 @@ class WakeWordService : Service() {
             } else {
                 scheduleRestart(2_000L)
             }
+        }
+    }
+
+    private fun String.containsWakeWord(): Boolean =
+        lowercase(Locale.ROOT).contains("jarvis")
+
+    private fun onWakeWordDetected() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastAssistantLaunchAttempt < LAUNCH_DEBOUNCE_MS) return
+        lastAssistantLaunchAttempt = now
+
+        updateNotification("“Jarvis” detected • Opening assistant; tap Open JARVIS if Android blocks it")
+        handler.post {
+            Toast.makeText(
+                this@WakeWordService,
+                "Jarvis detected. Trying to open the assistant.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        // Best-effort only: Android can block activities launched from a background service.
+        // The persistent notification's Open JARVIS action remains the supported fallback.
+        try {
+            val assistantIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ASSISTANT_URL)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            startActivity(assistantIntent)
+        } catch (_: Exception) {
+            updateNotification("“Jarvis” detected • Tap Open JARVIS to open the assistant")
         }
     }
 
