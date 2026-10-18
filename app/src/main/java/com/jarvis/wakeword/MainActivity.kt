@@ -43,7 +43,7 @@ class MainActivity : Activity() {
         })
 
         layout.addView(TextView(this).apply {
-            text = "When you start listening, Android SpeechRecognizer checks recognized speech for “Jarvis”. If your phone supports Android on-device recognition, the app prefers it; otherwise, your speech provider may process audio online. This is not a dedicated always-on keyword detector, so detection can be delayed or missed and listening may stop under Android battery or background limits. Saying “Jarvis” does not automatically launch the assistant; use the Open JARVIS action in the notification or the button below. You can stop the microphone listener at any time."
+            text = "When you start listening, Android SpeechRecognizer checks recognized speech for “Jarvis”. If your phone supports Android on-device recognition, the app prefers it; otherwise, your speech provider may process audio online. This is not a dedicated always-on keyword detector, so detection can be delayed or missed and listening may stop under Android battery or background limits. When “Jarvis” is detected, the app now attempts to open your JARVIS assistant automatically. Android may block app launches from the background; if that happens, tap Open JARVIS in the persistent notification. You can stop the microphone listener at any time."
             textSize = 15f
             setPadding(0, 12, 0, 12)
         })
@@ -117,6 +117,6 @@ class MainActivity : Activity() {
     private fun startWakeService() {
         val intent = Intent(this, WakeWordService::class.java)
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
-        Toast.makeText(this, "Wake listener started. Use the notification's Stop button to end listening.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Wake listener started. Say Jarvis to try opening the assistant, or use the notification's Open JARVIS action.", Toast.LENGTH_LONG).show()
     }
 }
