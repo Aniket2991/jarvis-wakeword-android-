@@ -26,13 +26,12 @@ This app listens for the word **“Jarvis”** after the user starts it and gran
 - Speech-recognition provider visibility is declared for Android 11+.
 
 ## Build and verification
-The GitHub Actions workflow runs Android lint and builds both debug and release variants. It verifies the debug APK signature and checks that the release variant is not debuggable.
+The GitHub Actions workflow runs Android lint and builds both debug and release variants. It verifies APK signatures and checks that the release variant is not debuggable.
 
 - `jarvis-wakeword-debug-apk` is a development/testing build, not the recommended distribution build.
-- The signed `jarvis-wakeword-release-apk` artifact is produced only when owner-controlled release-signing secrets are configured.
-- Without those secrets, CI build-checks an unsigned release variant but does not present it as an installable release.
-
-To configure release signing, create and retain your own keystore privately, then add these repository Actions secrets: `JARVIS_KEYSTORE_BASE64`, `JARVIS_KEYSTORE_PASSWORD`, `JARVIS_KEY_ALIAS`, and `JARVIS_KEY_PASSWORD`. Never commit or publish the keystore or passwords.
+- If owner-controlled release-signing secrets are configured, the workflow uploads `jarvis-wakeword-release-apk`, signed with your own release keystore.
+- Otherwise, it uploads `jarvis-wakeword-release-preview-apk`, a minified non-debuggable preview signed with the CI runner's temporary debug certificate. This preview is for first-install testing only. The certificate changes on future runs, so it is not suitable for in-place updates or distribution.
+- For a permanent release, create and retain your own keystore privately, then add these repository Actions secrets: `JARVIS_KEYSTORE_BASE64`, `JARVIS_KEYSTORE_PASSWORD`, `JARVIS_KEY_ALIAS`, and `JARVIS_KEY_PASSWORD`. Never commit or publish the keystore or passwords.
 
 ## Play Protect
 A successful build, a clean general scan, or a release signature does not guarantee that Google Play Protect will stop warning about this package. If it says **“Harmful app blocked”**, do not bypass the warning or turn Play Protect off. Review the exact APK and use Google's official developer-warning review process if the app is believed to be incorrectly classified.
