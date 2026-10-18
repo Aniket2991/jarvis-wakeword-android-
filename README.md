@@ -1,25 +1,38 @@
 # JARVIS Wake Word Android — prototype
 
-Starter Android project for experimenting with saying “Jarvis” while another app is in use.
+This is an experimental Android microphone-listening prototype, not a finished hands-free assistant.
 
-## Important limitations
-- Uses Android SpeechRecognizer, not a dedicated local wake-word spotter.
-- Not guaranteed to run continuously, survive force-stop, work on a locked screen, or work on every Android device.
-- Speech recognition may use the device's online speech provider. This is not an offline/private wake-word detector.
-- Detecting “Jarvis” currently updates the notification and shows a toast; it does not yet open the existing web assistant or capture a follow-up command.
-- Android 12+ microphone foreground-service rules require the service to be started while the app is visible; battery optimization and OEM background limits can interrupt it.
+## Microphone and privacy
+- Listening starts only after the user opens the app, checks the microphone disclosure, and grants the Android microphone permission.
+- A persistent notification is displayed while the service runs. Use its **Stop listening** action or the app's Stop button to stop it.
+- The app uses Android SpeechRecognizer. It is not a dedicated offline wake-word detector; depending on the speech provider and phone settings, audio may be processed by that provider.
+- The app does not currently send recognised commands to the JARVIS website, automatically launch the assistant, or perform commands.
+- Android and phone-vendor battery/background limits may interrupt listening. Force-stop, reboot, or a restricted speech provider can also stop it.
 
-## Build APK without Android Studio
-1. Open the repository's Actions tab and run “Build JARVIS Wake Word APK”, or push to main.
-2. Open the completed workflow run and download artifact “jarvis-wakeword-debug-apk”.
-3. Extract app-debug.apk, install it on your Android phone, and grant microphone permission.
+## Build debug APK
+1. Open the repository's Actions tab.
+2. Open the completed **Build JARVIS Wake Word APK** run.
+3. Download the `jarvis-wakeword-debug-apk` artifact and extract `app-debug.apk`.
 
-## Test
-1. Open the app and tap Start wake listening.
-2. Keep its ongoing notification visible.
-3. Switch to another app and say “Jarvis”.
-4. Check whether the notification changes to “Wake word detected”.
-5. Test with screen locked, battery saver, and after reboot separately; failures are expected on some phones.
+## Signed release build
+The workflow builds a signed release APK only when these four GitHub repository Actions secrets are configured:
+- `JARVIS_KEYSTORE_BASE64`: base64-encoded Android keystore file
+- `JARVIS_KEYSTORE_PASSWORD`
+- `JARVIS_KEY_ALIAS`
+- `JARVIS_KEY_PASSWORD`
+
+Create and retain your own keystore privately. Never commit or publish the keystore or its passwords. If these secrets are not configured, the workflow builds only the debug APK.
+
+## Test plan
+1. Install the APK and open the app.
+2. Read and accept the microphone notice; grant the requested permissions.
+3. Start listening and verify the ongoing notification appears.
+4. Switch to another app and say “Jarvis”; check whether the notification updates.
+5. Press **Stop listening** in the notification and verify the notification disappears.
+6. Repeat with battery saver and screen locked, noting that reliability is not guaranteed.
+
+## Play Protect
+A successful build or a release signature does not guarantee that Google Play Protect will stop showing a warning. Do not disable Play Protect globally. If it continues to flag the app, stop installing it and review the warning/report it for review.
 
 ## Next engineering step
-For reliable low-power detection, replace SpeechRecognizer with a dedicated on-device keyword-spotting engine (for example, a compatible sherpa-onnx KWS model), then add a deliberate user action to launch the assistant and a foreground command-capture flow. Review third-party model and SDK licenses before bundling.
+For reliable, low-power wake-word detection, replace SpeechRecognizer with a dedicated compatible on-device keyword-spotting engine and then implement an explicit wake-to-command flow. Review third-party model and SDK licenses before bundling.
