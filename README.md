@@ -1,4 +1,4 @@
-# JARVIS Wake Word Android — experimental prototype (0.4.0)
+# JARVIS Wake Word Android — experimental prototype (0.5.0)
 
 This app listens for the word **“Jarvis”** after the user starts it and grants microphone permission. It is an experimental voice trigger, not a finished always-on assistant.
 
@@ -6,8 +6,10 @@ This app listens for the word **“Jarvis”** after the user starts it and gran
 1. Install a tested build only if Play Protect allows it.
 2. Open **JARVIS Wake Word**, read the microphone/privacy disclosure, and tick the acknowledgement box.
 3. Grant microphone and notification permissions, then tap **Start wake listening**.
-4. Leave the ongoing notification visible. When recognition detects “Jarvis”, the app now attempts to open the existing assistant website automatically. If Android blocks a background launch, tap **Open JARVIS** in the notification.
-5. To stop microphone listening, tap **Stop listening** in the notification or the app.
+4. Use **Check phone readiness** to review microphone, notification, speech-recognition, on-device recognition, and battery-restriction status.
+5. If background listening is interrupted, use **Battery and app settings** and select an unrestricted/allow-background option if your Android version offers it.
+6. Leave the ongoing notification visible. When recognition detects “Jarvis”, the app attempts to open the existing assistant website. If Android blocks a background launch, tap **Open JARVIS** in the notification.
+7. To stop microphone listening, tap **Stop listening** in the notification or the app.
 
 ## Important limitations
 - This uses Android's SpeechRecognizer API, not a dedicated low-power wake-word model. It may miss or misrecognise the trigger.
@@ -17,13 +19,10 @@ This app listens for the word **“Jarvis”** after the user starts it and gran
 - Repeated recognition errors pause listening instead of retrying indefinitely.
 - The app does not forward spoken commands into the website or execute them.
 
-## Privacy and security changes
-- Explicit microphone disclosure and user acknowledgement before starting.
-- Persistent notification with **Open JARVIS** and **Stop listening** actions.
-- On-device recognition preferred when Android reports support.
-- Cleartext network traffic disabled; system-trusted certificates only.
-- Release variant uses R8 code shrinking and explicitly disables debugging.
-- Speech-recognition provider visibility is declared for Android 11+.
+## Version 0.5.0 changes
+- Added a phone-readiness diagnostic for permissions, recognizer availability, on-device recognition availability, and battery exemption status.
+- Added a shortcut to Android app settings to help the user review battery/background restrictions.
+- Kept explicit microphone disclosure, persistent notification actions, cleartext network disabled, and a non-debuggable minified release variant.
 
 ## Build and verification
 The GitHub Actions workflow runs Android lint and builds both debug and release variants. It verifies APK signatures and checks that the release variant is not debuggable.
