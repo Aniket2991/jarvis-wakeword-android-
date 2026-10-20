@@ -8,30 +8,21 @@ import android.app.Service
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.Bundle
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.os.SystemClock
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.widget.Toast
-import java.util.Locale
-import kotlin.math.min
+import com.openwakeword.OpenWakeWord
 
 /**
- * Experimental voice trigger, not a dedicated wake-word engine.
+ * Experimental on-device wake-word service.
  *
- * SpeechRecognizer may use a remote provider unless on-device recognition is available.
- * A persistent notification provides an Open JARVIS fallback and a Stop action.
- * Android may block automatic activity launches while this service is in the background.
+ * Wake-word inference is handled locally by openWakeWord Android. Opening the
+ * assistant website still requires a browser/network connection. Android may
+ * block launching an activity from a background service, so the notification
+ * includes an explicit Open JARVIS action.
  */
 class WakeWordService : Service() {
-    private var recognizer: SpeechRecognizer? = null
-    private val handler = Handler(Looper.getMainLooper())
-    private var restarting = false
-    private var consecutiveErrors = 0
+    private var detector: OpenWakeWord? = null
     private var lastAssistantLaunchAttempt = 0L
     private val channelId = "jarvis_wake_listener"
     private val notificationId = 71
@@ -39,14 +30,13 @@ class WakeWordService : Service() {
     companion object {
         const val ACTION_STOP = "com.jarvis.wakeword.ACTION_STOP_LISTENING"
         private const val ASSISTANT_URL = "https://jarvis-web-assistant-five.vercel.app"
-        private const val MAX_CONSECUTIVE_ERRORS = 8
         private const val LAUNCH_DEBOUNCE_MS = 10_000L
     }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(notificationId, buildNotification("Starting microphone listener"))
+        startForeground(notificationId, buildNotification("Preparing offline wake-word detector"))
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -54,154 +44,64 @@ class WakeWordService : Service() {
             stopListeningAndService()
             return START_NOT_STICKY
         }
-        if (recognizer == null && !restarting) startRecognition()
-        // Never restart microphone listening automatically after Android stops the service.
+        if (detector == null) startOfflineDetection()
+        // User must explicitly restart listening if Android stops the service.
         return START_NOT_STICKY
     }
 
-    private fun startRecognition() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            pauseRecognition("Speech recognition unavailable • Open the app to try again")
-            return
-        }
-
+    private fun startOfflineDetection() {
         try {
-            recognizer?.destroy()
-            recognizer = if (
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
-            ) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(this)
+            val wakeWordDetector = OpenWakeWord.Builder(this)
+                .setModel(OpenWakeWord.BuiltInModel.HEY_JARVIS)
+                .setThreshold(0.5f)
+                .setDebounceMs(LAUNCH_DEBOUNCE_MS)
+                .build()
+            detector = wakeWordDetector
+            updateNotification("Offline detector active • Say “Hey Jarvis”")
+            wakeWordDetector.start {
+                onWakeWordDetected()
             }
-
-            recognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {
-                    updateNotification("Microphone active • Listening for “Jarvis”")
-                }
-
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-
-                override fun onEndOfSpeech() {}
-
-                override fun onError(error: Int) {
-                    if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                        pauseRecognition("Microphone permission unavailable • Open the app to review permissions")
-                        return
-                    }
-
-                    consecutiveErrors += 1
-                    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                        pauseRecognition("Listening paused after repeated recognition errors • Open the app to restart")
-                        return
-                    }
-
-                    val exponent = (consecutiveErrors - 1).coerceAtMost(5)
-                    val backoff = min(1_000L * (1L shl exponent), 30_000L)
-                    scheduleRestart(backoff)
-                }
-
-                override fun onResults(results: Bundle?) {
-                    consecutiveErrors = 0
-                    val phrases = results
-                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        .orEmpty()
-                    if (phrases.any { it.containsWakeWord() }) {
-                        onWakeWordDetected()
-                    } else {
-                        updateNotification("Microphone active • Listening for “Jarvis”")
-                    }
-                    scheduleRestart(700)
-                }
-
-                override fun onPartialResults(partialResults: Bundle?) {
-                    val phrases = partialResults
-                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        .orEmpty()
-                    if (phrases.any { it.containsWakeWord() }) {
-                        onWakeWordDetected()
-                    }
-                }
-
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-
-            val request = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
-            }
-            recognizer?.startListening(request)
         } catch (_: SecurityException) {
-            pauseRecognition("Microphone permission unavailable • Open the app to review permissions")
+            detector?.release()
+            detector = null
+            updateNotification("Microphone permission unavailable • Open the app to review permissions")
         } catch (_: Exception) {
-            consecutiveErrors += 1
-            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                pauseRecognition("Listening paused after repeated errors • Open the app to restart")
-            } else {
-                scheduleRestart(2_000L)
-            }
+            detector?.release()
+            detector = null
+            updateNotification("Offline detector could not start • Check microphone permission and reopen the app")
         }
     }
-
-    private fun String.containsWakeWord(): Boolean =
-        lowercase(Locale.ROOT).contains("jarvis")
 
     private fun onWakeWordDetected() {
         val now = SystemClock.elapsedRealtime()
         if (now - lastAssistantLaunchAttempt < LAUNCH_DEBOUNCE_MS) return
         lastAssistantLaunchAttempt = now
 
-        updateNotification("“Jarvis” detected • Opening assistant; tap Open JARVIS if Android blocks it")
-        handler.post {
+        updateNotification("“Hey Jarvis” detected • Tap Open JARVIS if Android blocks automatic opening")
+        try {
             Toast.makeText(
                 this@WakeWordService,
-                "Jarvis detected. Trying to open the assistant.",
+                "Hey Jarvis detected. Trying to open the assistant.",
                 Toast.LENGTH_LONG
             ).show()
+        } catch (_: Exception) {
+            // Notification action remains available even if a toast cannot be shown.
         }
 
-        // Best-effort only: Android can block activities launched from a background service.
-        // The persistent notification's Open JARVIS action remains the supported fallback.
         try {
             val assistantIntent = Intent(Intent.ACTION_VIEW, Uri.parse(ASSISTANT_URL)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
             startActivity(assistantIntent)
         } catch (_: Exception) {
-            updateNotification("“Jarvis” detected • Tap Open JARVIS to open the assistant")
+            updateNotification("“Hey Jarvis” detected • Tap Open JARVIS to open the assistant")
         }
     }
 
-    private fun scheduleRestart(delay: Long) {
-        if (restarting) return
-        restarting = true
-        handler.postDelayed({
-            restarting = false
-            if (recognizer != null) startRecognition()
-        }, delay)
-    }
-
-    private fun pauseRecognition(message: String) {
-        handler.removeCallbacksAndMessages(null)
-        restarting = false
-        recognizer?.cancel()
-        recognizer?.destroy()
-        recognizer = null
-        updateNotification(message)
-    }
-
     private fun stopListeningAndService() {
-        handler.removeCallbacksAndMessages(null)
-        restarting = false
-        recognizer?.cancel()
-        recognizer?.destroy()
-        recognizer = null
+        detector?.stop()
+        detector?.release()
+        detector = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java).cancel(notificationId)
         stopSelf()
@@ -257,10 +157,9 @@ class WakeWordService : Service() {
     }
 
     override fun onDestroy() {
-        handler.removeCallbacksAndMessages(null)
-        recognizer?.cancel()
-        recognizer?.destroy()
-        recognizer = null
+        detector?.stop()
+        detector?.release()
+        detector = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
