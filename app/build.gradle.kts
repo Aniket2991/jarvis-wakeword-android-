@@ -11,8 +11,8 @@ android {
         applicationId = "com.jarvis.wakeword"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
     }
 
     compileOptions {
@@ -56,4 +56,9 @@ android {
             }
         }
     }
+}
+
+dependencies {
+    // Dedicated on-device wake-word detection; model licenses are documented in README.
+    implementation("com.github.msnilsen:openwakeword-android:0.1.0")
 }
