@@ -11,8 +11,8 @@ android {
         applicationId = "com.jarvis.wakeword"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0"
     }
 
     compileOptions {
@@ -24,8 +24,6 @@ android {
         jvmTarget = "17"
     }
 
-    // Owner-controlled signing is preferred. If no key is supplied, CI produces a
-    // temporary debug-signed release preview for first-install testing only.
     signingConfigs {
         create("release") {
             val keyStorePath = System.getenv("JARVIS_KEYSTORE_PATH")
@@ -54,7 +52,6 @@ android {
             signingConfig = if (!keyStorePath.isNullOrBlank()) {
                 signingConfigs.getByName("release")
             } else {
-                // Temporary CI preview only; do not use this certificate for distribution.
                 signingConfigs.getByName("debug")
             }
         }
